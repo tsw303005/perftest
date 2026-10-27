@@ -80,10 +80,29 @@ AC_PROG_INSTALL
 AC_PROG_LIBTOOL
 AC_PROG_RANLIB
 AC_HEADER_STDC
+
+dnl Detect Darwin (macOS) early: Apple's RDMA-over-Thunderbolt stack ships
+dnl a single librdma.dylib exporting the base ibverbs control-plane calls
+dnl (see mlx/mlx/distributed/jaccl/lib/jaccl/rdma.cpp for the exact set it
+dnl loads). There is no librdmacm or libibumad on Darwin -- those are only
+dnl needed for perftest's optional -R/-z rdma_cm path and -g multicast,
+dnl neither of which Apple's point-to-point TB5 fabric supports.
+AC_TRY_LINK([], [#if !defined(__APPLE__)
+#error nope
+#endif], [IS_DARWIN=yes], [IS_DARWIN=no])
+AM_CONDITIONAL([IS_DARWIN], [test "x$IS_DARWIN" = "xyes"])
+if test "x$IS_DARWIN" = "xyes"; then
+	AC_DEFINE([IS_DARWIN], [1], [OS is Darwin (macOS)])
+fi
+
 AC_CHECK_HEADERS([infiniband/verbs.h],,[AC_MSG_ERROR([ibverbs header files not found])])
-AC_CHECK_LIB([ibverbs], [ibv_get_device_list], [], [AC_MSG_ERROR([libibverbs not found])])
-AC_CHECK_LIB([rdmacm], [rdma_create_event_channel], [], AC_MSG_ERROR([librdmacm-devel not found]))
-AC_CHECK_LIB([ibumad], [umad_init], [LIBUMAD=-libumad], AC_MSG_ERROR([libibumad not found]))
+if test "x$IS_DARWIN" = "xyes"; then
+	AC_CHECK_LIB([rdma], [ibv_get_device_list], [], [AC_MSG_ERROR([librdma.dylib not found -- install the macOS SDK >= 26.2 RDMA-over-Thunderbolt stack])])
+else
+	AC_CHECK_LIB([ibverbs], [ibv_get_device_list], [], [AC_MSG_ERROR([libibverbs not found])])
+	AC_CHECK_LIB([rdmacm], [rdma_create_event_channel], [], AC_MSG_ERROR([librdmacm-devel not found]))
+	AC_CHECK_LIB([ibumad], [umad_init], [LIBUMAD=-libumad], AC_MSG_ERROR([libibumad not found]))
+fi
 AC_CHECK_LIB([m], [log], [LIBMATH=-lm], AC_MSG_ERROR([libm not found]))
 
 AC_CHECK_LIB([ibverbs], [ibv_reg_dmabuf_mr], [HAVE_REG_DMABUF_MR=yes], [HAVE_REG_DMABUF_MR=no])
@@ -139,7 +158,10 @@ if test $HAVE_XRCD = yes; then
 fi
 
 AC_TRY_LINK([
-#if !defined(__FreeBSD__)
+#if defined(__APPLE__)
+#include <libkern/OSByteOrder.h>
+#define htobe32(x) OSSwapHostToBigInt32(x)
+#elif !defined(__FreeBSD__)
 #include <endian.h>
 #else
 #include <sys/endian.h>
@@ -279,7 +301,7 @@ if [test $HAVE_SNIFFER = yes]; then
         AC_DEFINE([HAVE_SNIFFER], [1], [Enable Sniffer Flow Specification])
 fi
 
-if [test $IS_FREEBSD = no]; then
+if [test $IS_FREEBSD = no] && [test "x$IS_DARWIN" = "xno"]; then
 	AC_CHECK_HEADERS([pci/pci.h],,[AC_MSG_ERROR([pciutils header files not found, consider installing pciutils-devel])])
 	AC_CHECK_LIB([pci], [pci_init], [LIBPCI=-lpci], AC_MSG_ERROR([libpci not found]))
 	CPU_IS_RO_COMPLIANT=yes
@@ -358,10 +380,17 @@ if [test $HAVE_EX_ODP = yes] && [test $HAVE_EX = yes]; then
         AC_DEFINE([HAVE_EX_ODP], [1], [Have Extended  ODP support])
 fi
 
-AC_CHECK_LIB([dl], [dlclose],
-    [AC_MSG_RESULT([libdl found])
-     LIBS="$LIBS -ldl"],
-    [AC_MSG_ERROR([libdl not found. You need to install libdl for dynamic loading support])])
+dnl dlopen/dlclose live in libSystem on Darwin -- there is no separate
+dnl libdl.dylib to link, unlike glibc/FreeBSD libc.
+if test "x$IS_DARWIN" = "xyes"; then
+	AC_CHECK_FUNCS([dlclose], [],
+	    [AC_MSG_ERROR([dlclose not found in libSystem])])
+else
+	AC_CHECK_LIB([dl], [dlclose],
+	    [AC_MSG_RESULT([libdl found])
+	     LIBS="$LIBS -ldl"],
+	    [AC_MSG_ERROR([libdl not found. You need to install libdl for dynamic loading support])])
+fi
 
 
 # Check for CUDA header file in common location

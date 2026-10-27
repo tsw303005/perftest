@@ -3,7 +3,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#if !defined(__FreeBSD__)
+#if defined(__APPLE__)
+#include "darwin_compat.h"
+#elif !defined(__FreeBSD__)
 #include <malloc.h>
 #endif
 #include <getopt.h>
@@ -17,7 +19,7 @@
 #include <sys/ipc.h>
 #include <sys/shm.h>
 #include <pthread.h>
-#if defined(__FreeBSD__)
+#if defined(__FreeBSD__) || defined(__APPLE__)
 #include <sys/stat.h>
 #endif
 
@@ -2372,7 +2374,7 @@ int create_single_mr(struct pingpong_context *ctx, struct perftest_parameters *u
 	#endif
 	{
 		if (user_param->memory_type == MEMORY_MMAP) {
-			#if defined(__FreeBSD__)
+			#if defined(__FreeBSD__) || defined(__APPLE__)
 			posix_memalign(ctx->buf, user_param->cycle_buffer, ctx->buff_size);
 			#else
 			ctx->buf = memalign(user_param->cycle_buffer, ctx->buff_size);
@@ -2977,8 +2979,10 @@ xrcd: __attribute__((unused))
 	#ifdef HAVE_XRCD
 	if (user_param->use_xrc)
 		ibv_close_xrcd(ctx->xrc_domain);
+	#endif
 
-xrc_srq:
+xrc_srq: __attribute__((unused))
+	#ifdef HAVE_XRCD
 	if (user_param->use_xrc)
 		ibv_destroy_srq(ctx->srq);
 	#endif
@@ -4319,8 +4323,11 @@ int ctx_set_recv_wqes(struct pingpong_context *ctx,struct perftest_parameters *u
 
 			} else {
 
-				if (ibv_post_recv(ctx->qp[i],&ctx->rwr[i * user_param->recv_post_list],&bad_wr_recv)) {
-					fprintf(stderr, "Couldn't post recv Qp = %d: counter=%d\n",i,j);
+				int ret = ibv_post_recv(ctx->qp[i],&ctx->rwr[i * user_param->recv_post_list],&bad_wr_recv);
+				if (ret) {
+					fprintf(stderr, "Couldn't post recv Qp = %d: counter=%d ret=%d (%s) length=%lu mtu=%lu\n",
+						i, j, ret, strerror(ret), (unsigned long)length,
+						(unsigned long)MTU_SIZE(user_param->curr_mtu));
 					return 1;
 				}
 			}
@@ -6987,6 +6994,15 @@ int check_packet_pacing_support(struct pingpong_context *ctx)
 }
 #endif
 
+/* run_iter_fs() calls set_up_fs_rules(), which is only defined in
+ * raw_ethernet_resources.c -- a translation unit compiled into
+ * libperftest.a only when HAVE_RAW_ETH is set (Makefile.am). On
+ * platforms without ibv_create_flow (e.g. Darwin), that file is absent
+ * and this would otherwise be an unresolved symbol at link time; the
+ * only caller, raw_ethernet_fs_rate.c, is itself gated behind
+ * HAVE_RAW_ETH in Makefile.am's bin_PROGRAMS, so skipping this
+ * definition here is safe. */
+#ifdef HAVE_RAW_ETH
 int run_iter_fs(struct pingpong_context *ctx, struct perftest_parameters *user_param) {
 
 	struct raw_ethernet_info	*my_dest_info = NULL;
@@ -7080,6 +7096,7 @@ cleaning:
 
 	return retval;
 }
+#endif /* HAVE_RAW_ETH */
 
 
 /******************************************************************************
