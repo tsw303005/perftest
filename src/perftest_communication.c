@@ -4,7 +4,9 @@
 #include <limits.h>
 #include <unistd.h>
 #include <getopt.h>
-#if !defined(__FreeBSD__)
+#if defined(__APPLE__)
+#include "darwin_compat.h"
+#elif !defined(__FreeBSD__)
 #include <malloc.h>
 #include <byteswap.h>
 #endif
@@ -19,11 +21,11 @@
 #ifdef HAVE_SRD
 #include <infiniband/efadv.h>
 #endif
-#if defined(__FreeBSD__)
+#if defined(__FreeBSD__) || defined(__APPLE__)
 #include <ctype.h>
 #endif
 
-#if defined(__FreeBSD__)
+#if defined(__FreeBSD__) || defined(__APPLE__)
 #define s6_addr32 __u6_addr.__u6_addr32
 /* states: S_N: normal, S_I: comparing integral part, S_F: comparing
            fractional parts, S_Z: idem but with leading Zeroes only */

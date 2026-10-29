@@ -56,7 +56,7 @@ static const char *congestStr[] = {"DCQCN","LDCP","HC3","DIP"};
  *
  * Return Value : SUCCESS, FAILURE.
  ******************************************************************************/
-#if defined(__FreeBSD__)
+#if defined(__FreeBSD__) || defined(__APPLE__)
 #define strdupa(_s)                                             \
 ({                                                              \
         char *_d;                                               \
@@ -278,7 +278,7 @@ int check_if_valid_udp_port(int udp_port)
 static int get_cache_line_size()
 {
 	int size = 0;
- #if !defined(__FreeBSD__)
+ #if !defined(__FreeBSD__) && !defined(__APPLE__)
 	size = sysconf(_SC_LEVEL1_DCACHE_LINESIZE);
 	if (size == 0) {
 		#if defined(__sparc__) && defined(__arch64__)
@@ -1098,7 +1098,11 @@ static void init_perftest_params(struct perftest_parameters *user_param)
 	user_param->reply_every		= 1;
 	user_param->vlan_en             = OFF;
 	user_param->vlan_pcp		= 1;
+	#ifdef HAVE_RAW_ETH
 	user_param->print_eth_func 	= &print_ethernet_header;
+	#else
+	user_param->print_eth_func	= NULL;
+	#endif
 
 	if (user_param->tst == LAT) {
 		user_param->r_flag->unsorted	= OFF;
@@ -1132,7 +1136,11 @@ static void init_perftest_params(struct perftest_parameters *user_param)
 	user_param->check_alive_exited		= 0;
 	user_param->raw_mcast			= 0;
 	user_param->cache_line_size		= get_cache_line_size();
+#if defined(__APPLE__)
+	user_param->cycle_buffer = getpagesize();
+#else
 	user_param->cycle_buffer		= sysconf(_SC_PAGESIZE);
+#endif
 
 	if (user_param->cycle_buffer <= 0) {
 		user_param->cycle_buffer = DEF_PAGE_SIZE;
@@ -2516,6 +2524,13 @@ const char *link_layer_str(int8_t link_layer)
 			return "IB";
 		case IBV_LINK_LAYER_ETHERNET:
 			return "Ethernet";
+		#if defined(__APPLE__)
+		/* Apple's RDMA-over-Thunderbolt link layer: GID-routed like RoCE,
+		 * but not Ethernet, so it gets its own case rather than folding
+		 * into IBV_LINK_LAYER_ETHERNET above. */
+		case IBV_LINK_LAYER_THUNDERBOLT:
+			return "Thunderbolt";
+		#endif
 		default:
 			return "Unknown";
 	}
@@ -4403,7 +4418,9 @@ int parser(struct perftest_parameters *user_param,char *argv[], int argc)
 		user_param->use_ooo = 1;
 	if(vlan_en) {
 		user_param->vlan_en = ON;
+		#ifdef HAVE_RAW_ETH
 		user_param->print_eth_func = &print_ethernet_vlan_header;
+		#endif
 		vlan_en = 0;
 	}
 	if(user_param->use_data_direct && !user_param->use_cuda_dmabuf){
@@ -4454,7 +4471,7 @@ int check_link_and_mtu(struct ibv_context *context,struct perftest_parameters *u
 		return FAILURE;
 	}
 
-	if (user_param->link_type == IBV_LINK_LAYER_ETHERNET &&  user_param->gid_index == -1) {
+	if (IS_GID_ROUTED_LINK(user_param->link_type) &&  user_param->gid_index == -1) {
 		user_param->gid_index = 0;
 	}
 
@@ -4475,7 +4492,7 @@ int check_link_and_mtu(struct ibv_context *context,struct perftest_parameters *u
 
 	if (user_param->dualport==ON) {
 
-		if (user_param->link_type2 == IBV_LINK_LAYER_ETHERNET &&  user_param->gid_index2 == -1) {
+		if (IS_GID_ROUTED_LINK(user_param->link_type2) &&  user_param->gid_index2 == -1) {
 			user_param->gid_index2 = 1;
 		}
 	}
@@ -4527,7 +4544,7 @@ int check_link(struct ibv_context *context,struct perftest_parameters *user_para
 		return FAILURE;
 	}
 
-	if (user_param->link_type == IBV_LINK_LAYER_ETHERNET &&  user_param->gid_index == -1) {
+	if (IS_GID_ROUTED_LINK(user_param->link_type) &&  user_param->gid_index == -1) {
 		user_param->gid_index = 0;
 	}
 
@@ -4541,7 +4558,7 @@ int check_link(struct ibv_context *context,struct perftest_parameters *user_para
 
 	/* in case of dual-port mode */
 	if (user_param->dualport==ON) {
-		if (user_param->link_type2 == IBV_LINK_LAYER_ETHERNET &&  user_param->gid_index2 == -1) {
+		if (IS_GID_ROUTED_LINK(user_param->link_type2) &&  user_param->gid_index2 == -1) {
 			user_param->gid_index2 = 1;
 		}
 	}

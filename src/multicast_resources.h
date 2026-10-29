@@ -59,7 +59,12 @@
  ************************************************************************/
 
 #include <infiniband/verbs.h>
+#if defined(__APPLE__)
+#include "darwin_umad_shim.h"
+#include "darwin_verbs_shim.h"
+#else
 #include <infiniband/umad.h>
+#endif
 #include "get_clock.h"
 
 #define QPNUM_MCAST 				0xffffff

@@ -2,7 +2,7 @@
 #define RAW_ETHERNET_RESOURCES_H
 
 
-#if defined(__FreeBSD__)
+#if defined(__FreeBSD__) || defined(__APPLE__)
 #include <sys/types.h>
 #include <netinet/in.h>
 #endif
@@ -20,7 +20,9 @@
 #include "perftest_communication.h"
 
 #undef __LITTLE_ENDIAN
-#if defined(__FreeBSD__)
+#if defined(__APPLE__)
+#include "darwin_byteorder_shim.h"
+#elif defined(__FreeBSD__)
 #include <infiniband/byteorder.h>
 #else
 #include <asm/byteorder.h>
@@ -83,7 +85,7 @@ struct ETH_vlan_header {
 #define VLAN_VID (0x001)
 #define VLAN_CFI (0)
 
-#if defined(__FreeBSD__)
+#if defined(__FreeBSD__) || defined(__APPLE__)
 #if BYTE_ORDER == BIG_ENDIAN
 #define __BIG_ENDIAN_BITFIELD
 #define htobe32_const(x) (x)
@@ -158,6 +160,7 @@ struct TCP_header {
 	uint16_t        th_urgptr;
 }__attribute__((packed));
 
+#ifdef HAVE_RAW_ETH
 void gen_eth_header(struct ETH_header* eth_header,uint8_t* src_mac,uint8_t* dst_mac, uint16_t eth_type, struct memory_ctx* memory);
 void print_spec(struct ibv_flow_attr* flow_rules,struct perftest_parameters* user_param);
 //void print_ethernet_header(struct ETH_header* p_ethernet_header);
@@ -166,6 +169,7 @@ void print_ethernet_header(void* p_ethernet_header, struct perftest_parameters* 
 void print_ethernet_vlan_header(void* p_ethernet_header, struct perftest_parameters* user_param, struct memory_ctx *memory);
 void print_ip_header(struct IP_V4_header* ip_header);
 void print_udp_header(struct UDP_header* udp_header);
+#endif
 void print_pkt(void* pkt,struct perftest_parameters *user_param, struct memory_ctx *memory);
 
 int check_flow_steering_support(char *dev_name);

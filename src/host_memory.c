@@ -12,9 +12,9 @@
 #include "host_validation.h"
 #include "perftest_parameters.h"
 
-#if !defined(__FreeBSD__)
-#include <sys/syscall.h>
 #include <sys/mman.h>
+#if !defined(__FreeBSD__) && !defined(__APPLE__)
+#include <sys/syscall.h>
 #include <sys/vfs.h>
 #endif
 
@@ -36,7 +36,7 @@
 #define MFD_HUGETLB 0x0004U
 #endif
 
-#if !defined(__FreeBSD__)
+#if !defined(__FreeBSD__) && !defined(__APPLE__)
 static int create_hugepage_memfd(const char *name)
 {
 #ifdef SYS_memfd_create
@@ -149,7 +149,7 @@ int host_memory_allocate_buffer(struct memory_ctx *ctx, int alignment, uint64_t 
 				uint64_t *dmabuf_offset, void **addr, bool *can_init) {
 	struct host_memory_ctx *host_ctx = container_of(ctx, struct host_memory_ctx, base);
 
-#if defined(__FreeBSD__)
+#if defined(__FreeBSD__) || defined(__APPLE__)
 	posix_memalign(addr, alignment, size);
 	host_ctx->alloc_type = HOST_ALLOC_MALLOC;
 	host_ctx->alloc_size = size;

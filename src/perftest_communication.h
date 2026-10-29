@@ -41,11 +41,24 @@
 
 #include <netinet/in.h>
 #include <infiniband/verbs.h>
+#if defined(__APPLE__)
+#include "darwin_rdma_cm_shim.h"
+#else
 #include <rdma/rdma_cma.h>
+#endif
 #include "perftest_resources.h"
 
 #if defined(HAVE_MLX5DV)
 #include <infiniband/mlx5dv.h>
+#endif
+
+/* macOS's <machine/endian.h> defines __DARWIN_BYTE_ORDER instead of the
+ * glibc/BSD BYTE_ORDER/BIG_ENDIAN/LITTLE_ENDIAN trio used below. */
+#if defined(__APPLE__) && !defined(BYTE_ORDER)
+#include <machine/endian.h>
+#define BYTE_ORDER __DARWIN_BYTE_ORDER
+#define BIG_ENDIAN __DARWIN_BIG_ENDIAN
+#define LITTLE_ENDIAN __DARWIN_LITTLE_ENDIAN
 #endif
 
 /* Macro for 64 bit variables to switch to/from net */

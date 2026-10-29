@@ -56,9 +56,13 @@
 #include <infiniband/verbs.h>
 #include <unistd.h>
 #include <inttypes.h>
-#include <sched.h>
 #include <stdbool.h>
-#if !defined(__FreeBSD__)
+#if defined(__APPLE__)
+#include "darwin_compat.h"
+#else
+#include <sched.h>
+#endif
+#if !defined(__FreeBSD__) && !defined(__APPLE__)
 #include <malloc.h>
 #endif
 #include "get_clock.h"
@@ -78,6 +82,17 @@
 #define XRC (4)
 #define DC  (5)
 #define SRD (6)
+
+/* Apple's RDMA-over-Thunderbolt link layer (IBV_LINK_LAYER_THUNDERBOLT)
+ * routes by GID like RoCE/Ethernet, not by LID like InfiniBand; this
+ * covers both so the gid_index defaulting logic in check_link[_and_mtu]()
+ * doesn't need a separate Apple-only branch. */
+#if defined(__APPLE__)
+#define IS_GID_ROUTED_LINK(link_type) \
+	((link_type) == IBV_LINK_LAYER_ETHERNET || (link_type) == IBV_LINK_LAYER_THUNDERBOLT)
+#else
+#define IS_GID_ROUTED_LINK(link_type) ((link_type) == IBV_LINK_LAYER_ETHERNET)
+#endif
 
 /* Genral control definitions */
 #define OFF	     (0)

@@ -58,11 +58,16 @@
 #if defined(HAVE_HNSDV)
 #include <infiniband/hnsdv.h>
 #endif
-#include <rdma/rdma_cma.h>
 #include <stdint.h>
-#if defined(__FreeBSD__)
+#if defined(__APPLE__)
+#include "darwin_rdma_cm_shim.h"
+#include "darwin_compat.h"
+#include "darwin_verbs_shim.h"
+#elif defined(__FreeBSD__)
+#include <rdma/rdma_cma.h>
 #include <infiniband/byteswap.h>
 #else
+#include <rdma/rdma_cma.h>
 #include <byteswap.h>
 #endif
 #include <math.h>
@@ -1120,7 +1125,9 @@ int alloc_hugepage_region (struct pingpong_context *ctx, int qp_index);
  *	user_param	- user_parameters struct for this test.
  *
  */
+#ifdef HAVE_RAW_ETH
 int run_iter_fs(struct pingpong_context *ctx, struct perftest_parameters *user_param);
+#endif
 
 /* rdma_cm_allocate_nodes:
 *
